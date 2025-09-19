@@ -239,12 +239,17 @@ wss.on("connection", (ws) => {
   });
 });
 
-// Inicia servidor HTTP + WS
-server.listen(8080, () => {
-  console.log("Servidor rodando em http://localhost:8080 🚀");
-  console.log("📡 WebSocket ativo para comunicação com ESP32 e browsers");
-  console.log("🔐 Sistema de autenticação ativo");
-  console.log("🎮 Suporte a controles PlayStation via Bluetooth");
-  console.log("📹 Transmissão de vídeo suportada");
-  console.log("=".repeat(50));
+const PORT = process.env.PORT || 8080;
+
+server.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
+
+  // Se estiver no Heroku, imprime a URL pública
+  if (process.env.NODE_ENV === "production") {
+    console.log("🌐 Acesse em: " + (process.env.HEROKU_APP_NAME 
+      ? `https://${process.env.HEROKU_APP_NAME}.herokuapp.com`
+      : "URL do Heroku"));
+  } else {
+    console.log(`🔗 Local: http://localhost:${PORT}`);
+  }
 });
