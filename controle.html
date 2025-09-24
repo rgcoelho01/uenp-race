@@ -278,7 +278,7 @@
     let isConnected = false;
     
     // Variáveis para controle de PlayStation
-    const DEAD_ZONE = 0.3;
+    const DEAD_ZONE = 0.2;
     let lastStickValues = { x: 0, y: 0 };
     let gamepadConnected = false;
 
@@ -531,7 +531,7 @@
       
       // Analógico esquerdo (eixos 0 e 1)
       let yValue = Math.abs(controller.axes[1]) > DEAD_ZONE ? controller.axes[1] : 0;
-      let xValue = Math.abs(controller.axes[0]) > DEAD_ZONE ? controller.axes[0] : 0;
+      let xValue = Math.abs(controller.axes[2]) > DEAD_ZONE ? controller.axes[2] : 0;
       
       // Se houve mudança nos valores do analógico
       if (xValue !== lastStickValues.x || yValue !== lastStickValues.y) {
