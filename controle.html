@@ -277,6 +277,10 @@
     let streamUrl;
     let isConnected = false;
     
+    // --- NOVO: controle das teclas pressionadas ---
+    const keysPressed = {};
+    let commandLoop;
+    
     // Variáveis para controle de PlayStation
     const DEAD_ZONE = 0.2;
     let lastStickValues = { x: 0, y: 0 };
@@ -483,6 +487,43 @@
           break;
       }
 
+      // --- NOVO: Teclado contínuo ---
+      function handleKeyDown(event) {
+        switch (event.code) {
+          case "ArrowUp":
+         case "ArrowDown":
+         case "ArrowLeft":
+         case "ArrowRight":
+            event.preventDefault();
+            keysPressed[event.code] = true;
+           break;
+        }
+      }
+
+      function handleKeyUp(event) {
+        switch (event.code) {
+          case "ArrowUp":
+          case "ArrowDown":
+          case "ArrowLeft":
+          case "ArrowRight":
+            event.preventDefault();
+            keysPressed[event.code] = false;
+            break;
+        }
+      }      
+
+      function startCommandLoop() {
+        if (commandLoop) return;
+        commandLoop = setInterval(() => {
+          if (!isConnected) return;
+
+          if (keysPressed["ArrowUp"]) sendCommand("forward");
+          if (keysPressed["ArrowDown"]) sendCommand("backward");
+          if (keysPressed["ArrowLeft"]) sendCommand("left");
+          if (keysPressed["ArrowRight"]) sendCommand("right");
+        }, 100); // envia a cada 100ms
+      }      
+
       // Aplicar efeito visual no botão correspondente
       if (buttonId) {
         const button = document.getElementById(buttonId);
@@ -596,9 +637,14 @@
       
       connectWebSocket();
       addButtonEffects();
+      document.addEventListener("keydown", handleKeyDown);
+      document.addEventListener("keyup", handleKeyUp);
+      startCommandLoop();
       
       // Adicionar listener para teclado
-      document.addEventListener('keydown', handleKeyPress);
+      //document.addEventListener('keydown', handleKeyPress);
+
+      document.addEventListener('DOMContentLoaded', init);
       
       // Focar na página para capturar eventos de teclado
       document.body.focus();
