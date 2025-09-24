@@ -277,10 +277,12 @@
     let streamUrl;
     let isConnected = false;
     
-    // --- NOVO: controle das teclas pressionadas ---
-    const keysPressed = {};
-    let commandLoop;
-    
+    // teclado contínuo
+    const keysPressed = {}; // ex: keysPressed['ArrowUp'] = true
+    let commandLoop = null;
+    const COMMAND_INTERVAL_MS = 100; // ajuste aqui (100ms envia 10x/s)
+
+
     // Variáveis para controle de PlayStation
     const DEAD_ZONE = 0.2;
     let lastStickValues = { x: 0, y: 0 };
@@ -458,88 +460,142 @@
       }, 5000);
     }
 
-    // Controles do teclado
-    function handleKeyPress(event) {
+
+    // ===== map helper =====
+    function commandFromCode(code) {
+      if (code === 'ArrowUp') return 'forward';
+      if (code === 'ArrowDown') return 'backward';
+      if (code === 'ArrowLeft') return 'left';
+      if (code === 'ArrowRight') return 'right';
+      return null;
+    }
+
+    function handleKeyDown(event) {
       if (!isConnected) return;
+      if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)) return;
+      event.preventDefault();
+      keysPressed[event.code] = true;
+      // opcional: enviar logo ao apertar para feedback imediato
+      const cmd = commandFromCode(event.code);
+      if (cmd) sendCommand(cmd);
+    }
 
-      let buttonId = '';
-      
-      switch (event.code) {
-        case 'ArrowUp':
-          event.preventDefault();
-          buttonId = 'forwardBtn';
-          sendCommand('forward');
-          break;
-        case 'ArrowDown':
-          event.preventDefault();
-          buttonId = 'backwardBtn';
-          sendCommand('backward');
-          break;
-        case 'ArrowLeft':
-          event.preventDefault();
-          buttonId = 'leftBtn';
-          sendCommand('left');
-          break;
-        case 'ArrowRight':
-          event.preventDefault();
-          buttonId = 'rightBtn';
-          sendCommand('right');
-          break;
-      }
+    function handleKeyUp(event) {
+      if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)) return;
+      event.preventDefault();
+      keysPressed[event.code] = false;
+    }
 
-      // --- NOVO: Teclado contínuo ---
-      function handleKeyDown(event) {
-        switch (event.code) {
-          case "ArrowUp":
-         case "ArrowDown":
-         case "ArrowLeft":
-         case "ArrowRight":
-            event.preventDefault();
-            keysPressed[event.code] = true;
-           break;
-        }
-      }
+        function startCommandLoop() {
+      if (commandLoop) return;
+      commandLoop = setInterval(() => {
+        if (!isConnected) return;
+        if (keysPressed['ArrowUp']) sendCommand('forward');
+        if (keysPressed['ArrowDown']) sendCommand('backward');
+        if (keysPressed['ArrowLeft']) sendCommand('left');
+        if (keysPressed['ArrowRight']) sendCommand('right');
+      }, COMMAND_INTERVAL_MS);
+    }
 
-      function handleKeyUp(event) {
-        switch (event.code) {
-          case "ArrowUp":
-          case "ArrowDown":
-          case "ArrowLeft":
-          case "ArrowRight":
-            event.preventDefault();
-            keysPressed[event.code] = false;
-            break;
-        }
-      }      
-
-      function startCommandLoop() {
-        if (commandLoop) return;
-        commandLoop = setInterval(() => {
-          if (!isConnected) return;
-
-          if (keysPressed["ArrowUp"]) sendCommand("forward");
-          if (keysPressed["ArrowDown"]) sendCommand("backward");
-          if (keysPressed["ArrowLeft"]) sendCommand("left");
-          if (keysPressed["ArrowRight"]) sendCommand("right");
-        }, 100); // envia a cada 100ms
-      }      
-
-      // Aplicar efeito visual no botão correspondente
-      if (buttonId) {
-        const button = document.getElementById(buttonId);
-        if (button) {
-          // Efeito de clique
-          button.style.transform = 'scale(0.95)';
-          button.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
-          
-          // Restaurar após 150ms
-          setTimeout(() => {
-            button.style.transform = 'scale(1)';
-            button.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.2)';
-          }, 150);
-        }
+    function stopCommandLoop() {
+      if (commandLoop) {
+        clearInterval(commandLoop);
+        commandLoop = null;
       }
     }
+
+    // limpa teclas ao perder foco para evitar stuck keys
+    function clearKeys() {
+      Object.keys(keysPressed).forEach(k => keysPressed[k] = false);
+    }
+    window.addEventListener('blur', clearKeys);
+
+    // ===== suporte a segurar botões na tela (mouse/touch) =====
+    function attachButtonHoldListeners() {
+      const map = {
+        forwardBtn: 'ArrowUp',
+        backwardBtn: 'ArrowDown',
+        leftBtn: 'ArrowLeft',
+        rightBtn: 'ArrowRight'
+      };
+
+      Object.keys(map).forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        const code = map[id];
+
+        btn.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          keysPressed[code] = true;
+          const cmd = commandFromCode(code);
+          if (cmd) sendCommand(cmd); // envio imediato
+          btn.style.transform = 'scale(0.95)';
+          btn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        });
+
+        // pointerup e pointerleave param garantem que quando soltar fora do botão a flag volte a false
+        btn.addEventListener('pointerup', (e) => {
+          e.preventDefault();
+          keysPressed[code] = false;
+          btn.style.transform = 'scale(1)';
+          btn.style.boxShadow = '';
+        });
+
+        btn.addEventListener('pointercancel', () => { keysPressed[code] = false; btn.style.transform = 'scale(1)'; btn.style.boxShadow = ''; });
+        btn.addEventListener('pointerleave', () => { keysPressed[code] = false; btn.style.transform = 'scale(1)'; btn.style.boxShadow = ''; });
+
+        // optional: click fallback for older browsers
+        btn.addEventListener('click', () => {
+          const cmd = commandFromCode(code);
+          if (cmd) sendCommand(cmd);
+        });
+      });
+    }
+
+    // // Controles do teclado
+    // function handleKeyPress(event) {
+    //   if (!isConnected) return;
+
+    //   let buttonId = '';
+      
+    //   switch (event.code) {
+    //     case 'ArrowUp':
+    //       event.preventDefault();
+    //       buttonId = 'forwardBtn';
+    //       sendCommand('forward');
+    //       break;
+    //     case 'ArrowDown':
+    //       event.preventDefault();
+    //       buttonId = 'backwardBtn';
+    //       sendCommand('backward');
+    //       break;
+    //     case 'ArrowLeft':
+    //       event.preventDefault();
+    //       buttonId = 'leftBtn';
+    //       sendCommand('left');
+    //       break;
+    //     case 'ArrowRight':
+    //       event.preventDefault();
+    //       buttonId = 'rightBtn';
+    //       sendCommand('right');
+    //       break;
+    //   }
+    //   // Aplicar efeito visual no botão correspondente
+    //   if (buttonId) {
+    //     const button = document.getElementById(buttonId);
+    //     if (button) {
+    //       // Efeito de clique
+    //       button.style.transform = 'scale(0.95)';
+    //       button.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.3)';
+          
+    //       // Restaurar após 150ms
+    //       setTimeout(() => {
+    //         button.style.transform = 'scale(1)';
+    //         button.style.boxShadow = '0 5px 15px rgba(0, 0, 0, 0.2)';
+    //       }, 150);
+    //     }
+    //   }
+    // }
 
     // Efeitos visuais nos botões
     function addButtonEffects() {
@@ -631,22 +687,16 @@
 
     // Inicializar página
     function init() {
-      if (!checkAuth() || !getUrlParams()) {
-        return;
-      }
-      
+      if (!checkAuth() || !getUrlParams()) return;
       connectWebSocket();
       addButtonEffects();
+      attachButtonHoldListeners();
       document.addEventListener("keydown", handleKeyDown);
       document.addEventListener("keyup", handleKeyUp);
       startCommandLoop();
       
-      // Adicionar listener para teclado
-      //document.addEventListener('keydown', handleKeyPress);
-
-      document.addEventListener('DOMContentLoaded', init);
-      
-      // Focar na página para capturar eventos de teclado
+      // garantir foco no body para capturar teclado (ajuda em alguns navegadores)
+      document.body.tabIndex = -1;
       document.body.focus();
     }
 
